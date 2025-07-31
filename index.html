@@ -3,24 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dictation Error Highlighter (LCS)</title>
+  <title>Dictation Error Highlighter</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       background-color: #f5f5f5;
-      padding: 20px;
+      padding: 10px;
+      margin: 0;
     }
     h1, h3 {
       text-align: center;
     }
     textarea {
       width: 100%;
-      height: 180px;
+      min-height: 140px;
       padding: 10px;
       font-size: 16px;
       border: 1px solid #ccc;
       border-radius: 4px;
       margin-bottom: 15px;
+      box-sizing: border-box;
     }
     .btn {
       display: block;
@@ -32,6 +34,8 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
+      width: 100%;
+      max-width: 300px;
     }
     .btn:hover {
       background-color: #0056b3;
@@ -41,6 +45,8 @@
       padding: 15px;
       border: 1px solid #ccc;
       border-radius: 4px;
+      margin-top: 20px;
+      display: none;
     }
     table {
       width: 100%;
@@ -62,21 +68,40 @@
       border: 1px solid #ccc;
       border-radius: 5px;
       line-height: 1.6;
+      overflow-x: auto;
     }
     .missing-or-wrong {
-      background-color: #ffcccc;
-      color: red;
       font-weight: bold;
+      background-color: #fddede;
+      color: #b20000;
+      border-radius: 4px;
+      padding: 2px 4px;
     }
     .extra-word {
-      background-color: #fff3cd;
-      color: #856404;
       font-weight: bold;
+      background-color: #fff6d5;
+      color: #8a6d00;
+      border-radius: 4px;
+      padding: 2px 4px;
+    }
+    .strikethrough {
+      text-decoration: line-through;
+    }
+    @media (min-width: 768px) {
+      .btn {
+        width: auto;
+      }
     }
   </style>
 </head>
 <body>
   <h1>Dictation Error Highlighter</h1>
+
+  <div style="text-align: center; margin: 15px auto;">
+    <label>
+      <input type="checkbox" id="strikeToggle" checked onchange="toggleStrikethrough()" /> Strike through extra words
+    </label>
+  </div>
 
   <h3>Official Passage:</h3>
   <textarea id="originalText" placeholder="Paste the original dictation passage here..."></textarea>
@@ -84,19 +109,30 @@
   <h3>Your Typed Passage:</h3>
   <textarea id="userText" placeholder="Type your version here..."></textarea>
 
-  <button class="btn" onclick="highlightErrors()">Evaluate</button>
+  <button class="btn" onclick="evaluateAndNotify()">Evaluate</button>
 
   <div id="results"></div>
 
+  <!-- Feedback Popup -->
+  <div id="feedbackPopup" style="display:none; position:fixed; z-index:999; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6);">
+    <div style="background:white; width:90%; max-width:400px; margin:10% auto; padding:20px; border-radius:8px; text-align:center;">
+      <h3>✅ Evaluation Complete!</h3>
+      <p>Your test has been checked. Click OK to view the results.</p>
+      <button onclick="showResults()" style="margin-top:15px; padding:8px 20px; background:#007BFF; color:white; border:none; border-radius:5px;">OK</button>
+    </div>
+  </div>
+
   <script>
+    let originalHighlights = [];
+    let resultHTML = "";
+
     function tokenize(text) {
-      return text.match(/\b[\w'’-]+\b|[.,!?;:"]+/g) || [];
+      return text.match(/\\b[\\w'’-]+\\b|[.,!?;:"]+/g) || [];
     }
 
     function lcs(X, Y) {
       const m = X.length, n = Y.length;
       const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-
       for (let i = 1; i <= m; i++) {
         for (let j = 1; j <= n; j++) {
           if (X[i - 1] === Y[j - 1]) {
@@ -106,7 +142,6 @@
           }
         }
       }
-
       let i = m, j = n, pairs = [];
       while (i > 0 && j > 0) {
         if (X[i - 1] === Y[j - 1]) {
@@ -121,10 +156,9 @@
       return pairs;
     }
 
-    function highlightErrors() {
+    function evaluateAndNotify() {
       const original = tokenize(document.getElementById("originalText").value.trim());
       const user = tokenize(document.getElementById("userText").value.trim());
-
       const matches = lcs(original, user);
       const originalMatched = new Set(matches.map(p => p[0]));
       const userMatched = new Set(matches.map(p => p[1]));
@@ -134,20 +168,17 @@
       let missingPunctuations = 0;
 
       let oi = 0, ui = 0, lcsIndex = 0;
-      let highlighted = "";
+      originalHighlights = [];
 
       while (oi < original.length || ui < user.length) {
         if (lcsIndex < matches.length && oi === matches[lcsIndex][0] && ui === matches[lcsIndex][1]) {
-          highlighted += `${user[ui]} `;
-          oi++;
-          ui++;
-          lcsIndex++;
+          originalHighlights.push({ text: user[ui], type: 'normal' });
+          oi++; ui++; lcsIndex++;
         } else if (ui < user.length && !userMatched.has(ui)) {
-          highlighted += `<span class='extra-word'>${user[ui]}</span> `;
-          extra++;
-          ui++;
+          originalHighlights.push({ text: user[ui], type: 'extra' });
+          extra++; ui++;
         } else if (oi < original.length && !originalMatched.has(oi)) {
-          highlighted += `<span class='missing-or-wrong'>${original[oi]}</span> `;
+          originalHighlights.push({ text: original[oi], type: 'missing' });
           if (/^[.,!?;:"]+$/.test(original[oi])) {
             missingPunctuations++;
           } else {
@@ -155,8 +186,7 @@
           }
           oi++;
         } else {
-          oi++;
-          ui++;
+          oi++; ui++;
         }
       }
 
@@ -164,7 +194,7 @@
       const correctWords = totalWords - missingOrWrong;
       const accuracy = Math.max(0, ((correctWords / totalWords) * 100).toFixed(2));
 
-      const resultHTML = `
+      resultHTML = `
         <table>
           <tr><th>Total Words</th><td>${totalWords}</td></tr>
           <tr><th>Wrong or Missing Words</th><td>${missingOrWrong}</td></tr>
@@ -172,12 +202,34 @@
           <tr><th>Missing Punctuations</th><td>${missingPunctuations}</td></tr>
           <tr><th>Accuracy (%)</th><td>${accuracy}%</td></tr>
         </table>
-        <div class="highlight-box">
-          <strong>Highlighted Comparison:</strong><br>${highlighted.trim()}
+        <div class="highlight-box" id="highlightBox">
+          <strong>Highlighted Comparison:</strong><br>${renderHighlights()}
         </div>
       `;
 
+      document.getElementById("feedbackPopup").style.display = 'block';
+    }
+
+    function renderHighlights() {
+      const strike = document.getElementById("strikeToggle").checked;
+      return originalHighlights.map(word => {
+        if (word.type === 'normal') return word.text;
+        if (word.type === 'extra') return `<span class='extra-word${strike ? " strikethrough" : ""}'>${word.text}</span>`;
+        if (word.type === 'missing') return `<span class='missing-or-wrong'>${word.text}</span>`;
+      }).join(" ");
+    }
+
+    function toggleStrikethrough() {
+      const highlightBox = document.getElementById("highlightBox");
+      if (highlightBox) {
+        highlightBox.innerHTML = `<strong>Highlighted Comparison:</strong><br>${renderHighlights()}`;
+      }
+    }
+
+    function showResults() {
       document.getElementById("results").innerHTML = resultHTML;
+      document.getElementById("results").style.display = "block";
+      document.getElementById("feedbackPopup").style.display = "none";
     }
   </script>
 </body>
