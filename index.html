@@ -63,6 +63,7 @@
       background-color: #f0f0f0;
     }
     .highlight-box {
+      text-align: justify;
       margin-top: 20px;
       padding: 10px;
       background: #fdfdfd;
@@ -88,9 +89,45 @@
     .strikethrough {
       text-decoration: line-through;
     }
-    @media (min-width: 768px) {
-      .btn {
-        width: auto;
+    @media print {
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      #results {
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      .highlight-box {
+        text-align: justify;
+        color: inherit;
+      }
+      .missing-or-wrong {
+        background-color: #fddede !important;
+        color: #8C001A !important;
+      }
+      .extra-word {
+        background-color: #fff6d5 !important;
+        color: #566D7E !important;
+      }
+
+      table, th, td { border: 1px solid #ccc; border-collapse: collapse; }
+      th, td { padding: 10px; }
+      body * {
+        visibility: hidden;
+      }
+      #results, #results * {
+        visibility: visible;
+      }
+      #results {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background-color: white;
+      }
+      @page {
+        margin: 1in;
       }
     }
   </style>
@@ -113,8 +150,8 @@
   <button class="btn" onclick="evaluateAndNotify()">Evaluate</button>
 
   <div id="results"></div>
+  <button class="btn" id="printBtn" style="display:none;" onclick="triggerPrint()">🖨️ Print Page</button>
 
-  <!-- Feedback Popup -->
   <div id="feedbackPopup" style="display:none; position:fixed; z-index:999; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6);">
     <div style="background:white; width:90%; max-width:400px; margin:10% auto; padding:20px; border-radius:8px; text-align:center;">
       <h3>✅ Evaluation Complete!</h3>
@@ -231,6 +268,13 @@
       document.getElementById("results").innerHTML = resultHTML;
       document.getElementById("results").style.display = "block";
       document.getElementById("feedbackPopup").style.display = "none";
+      document.getElementById("printBtn").style.display = "block";
+    }
+
+    function triggerPrint() {
+      setTimeout(() => {
+        window.print();
+      }, 100);
     }
   </script>
 </body>
